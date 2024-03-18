@@ -7,45 +7,54 @@ curl -L -X PUT -H "Accept: application/vnd.github+json" -H "Authorization: Beare
 # To add comment remotely
 curl -X POST -H "Authorization: token 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" -H "Accept: application/vnd.github.v3+json" -d '{"body": "asf"}'   "https://api.github.com/repos/myorgpradeem/mpoctest/issues/157/comments"
 
-# name: Check Org Private Member
+# name: Add Memeber to org-members
+
+name: Add Memeber to org-members
 
 on:
-  workflow_dispatch:
-    inputs:
-      username:
-        description: 'Username to check membership for'
-        required: true
+  issue_comment:
+    types: [created]
 
 jobs:
-  check_membership:
+  process-comment:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v2
-      
-      - name: Check Org Private Member
-        env:
-          ORG_NAME: myorgpradeem
-          USERNAME: ${{ github.event.inputs.username }}
-          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
-          APP_ID: 853518
-          INSTALLATION_ID: 48299343
+      - uses: actions/checkout@v2
+      - name: GitHub_ID provided in comment 
         run: |
-          JWT=$(echo -n "{ \"iss\": $APP_ID }" | openssl dgst -sha256 -sign <(echo "$PRIVATE_KEY") -binary | openssl enc -base64 -A)
-          INSTALLATION_TOKEN=$(curl -s -X POST -H "Authorization: Bearer $JWT" -H "Accept: application/vnd.github.v3+json" \
-                               "https://api.github.com/app/installations/$INSTALLATION_ID/access_tokens" \
-                               | jq -r .token)
-          response=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: token $INSTALLATION_TOKEN" \
-                      -H "Accept: application/vnd.github.v3+json" \
-                      "https://api.github.com/orgs/$ORG_NAME/members/$USERNAME")
+          echo "Provided GitHub_ID is: ${{ github.event.comment.body }}"
+
+      - name: Extract GITHUB_ID
+        id: extract
+        run: |
+          echo "${{ github.event.comment.body }}" > comment.txt
+          cat comment.txt  # Check the content of comment.txt
+          GITHUB_ID=$(cat comment.txt | cut -d' ' -f2)  # Extract the variable using cut
+          echo "Extracted GITHUB_ID: $GITHUB_ID"
+          echo "GITHUB_ID=$GITHUB_ID" >> $GITHUB_ENV  # Set the environment variable using Environment Files
+
+      - name: Add Member to org-members team.
+        run: |
+          # Set organization name, username, and token
+          ORG_NAME="myorgpradeem"
+          USERNAME="$GITHUB_ID"
+          TOKEN="${{ secrets.API_TOKEN }}"
+          
+          # Make request to GitHub API
+          response=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: token $TOKEN" -H "Accept: application/vnd.github.v3+json" "https://api.github.com/orgs/$ORG_NAME/memberships/$USERNAME")
+
+          # Check Response Status
           if [ $response -eq 200 ]; then
-              echo "$USERNAME is a private member of $ORG_NAME."
+            curl -L -X PUT -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer ${{ secrets.API_TOKEN }}" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/orgs/myorgpradeem/teams/myteam/memberships/$VAR_NAME"
+          elif [ $response -eq 204 ]; then
+            echo "$USERNAME is not a member of $ORG_NAME."
           elif [ $response -eq 404 ]; then
-              echo "$USERNAME is not a private member of $ORG_NAME."
+            echo "Error: $USERNAME or $ORG_NAME not found."
           else
-              echo "Error: HTTP status code $response"
+            echo "Error: HTTP status code $response"
           fi
-        shell: bash
-Error:
-
-
+        env:
+          GITHUB_TOKEN: ${{ secrets.API_TOKEN }}
