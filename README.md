@@ -37,6 +37,7 @@ jobs:
         run: |
           # Set organization name, username, and token
           ORG_NAME="myorgpradeem"
+          MY_TEAM="myteam"
           USERNAME="$GITHUB_ID"
           TOKEN="${{ secrets.API_TOKEN }}"
           
@@ -48,7 +49,7 @@ jobs:
             curl -L -X PUT -H "Accept: application/vnd.github+json" \
               -H "Authorization: Bearer ${{ secrets.API_TOKEN }}" \
               -H "X-GitHub-Api-Version: 2022-11-28" \
-              "https://api.github.com/orgs/myorgpradeem/teams/myteam/memberships/$VAR_NAME"
+              "https://api.github.com/orgs/$ORG_NAME/teams/$MY_TEAM/memberships/$USERNAME"
           elif [ $response -eq 204 ]; then
             echo "$USERNAME is not a member of $ORG_NAME."
           elif [ $response -eq 404 ]; then
