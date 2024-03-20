@@ -59,3 +59,53 @@ jobs:
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.API_TOKEN }}
+
+
+# Create Issue - Add Member to org-members and auto close issues
+
+name: Add Member to org-members
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  extract-variables:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Extract GITHUB_ID
+        run: |
+          issue_body="${{ github.event.issue.body }}"
+          GITHUB_ID=$(echo "$issue_body" | grep -oP 'GITHUB_ID:\s*\K\S+')
+          echo "Extracted variable: $GITHUB_ID"
+          echo "GITHUB_ID=$GITHUB_ID" >> $GITHUB_ENV
+
+      - name: Add Member to org-members team.
+        run: |
+          # Set organization name, username, and token
+          ORG_NAME="myorgpradeem"
+          MY_TEAM="myteam"
+          USERNAME="$GITHUB_ID"
+          TOKEN="${{ secrets.API_TOKEN }}"
+          
+          # Make request to GitHub API
+          response=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: token $TOKEN" -H "Accept: application/vnd.github.v3+json" "https://api.github.com/orgs/$ORG_NAME/memberships/$USERNAME")
+          
+          # Check Response Status
+          if [ $response -eq 200 ]; then
+            curl -L -X PUT -H "Accept: application/vnd.github+json" -H "Authorization: Bearer ${{ secrets.API_TOKEN }}" -H "X-GitHub-Api-Version: 2022-11-28" "https://api.github.com/orgs/$ORG_NAME/teams/$MY_TEAM/memberships/$USERNAME"
+            echo "$USERNAME is added as member of $ORG_NAME." > comment.md
+            gh issue comment ${{ github.event.issue.number }} --body-file=comment.md
+            gh issue close ${{ github.event.issue.number }}
+          elif [ $response -eq 404 ]; then
+            echo "$USERNAME is not found in $ORG_NAME." > comment.md
+            gh issue comment ${{ github.event.issue.number }} --body-file=comment.md
+            gh issue close ${{ github.event.issue.number }}
+          else
+            echo "Error: HTTP status code $response"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.API_TOKEN }}
